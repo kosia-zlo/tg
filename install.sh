@@ -48,8 +48,8 @@ fi
 
 echo
 
-### 3) Запрос BOT_TOKEN, ADMIN_ID и FILEVPN_NAME
-echo "=== Шаг 3: Настройка BOT_TOKEN, ADMIN_ID и FILEVPN_NAME ==="
+### 3) Запрос BOT_TOKEN, ADMIN_ID, FILEVPN_NAME и MAX_USER_CONFIGS
+echo "=== Шаг 3: Настройка параметров бота ==="
 read -p "Введите BOT_TOKEN (токен из BotFather): " BOT_TOKEN
 BOT_TOKEN="$(echo "$BOT_TOKEN" | xargs)"
 if [ -z "$BOT_TOKEN" ]; then
@@ -73,10 +73,19 @@ if [ -z "$FILEVPN_NAME" ]; then
 fi
 
 echo
+read -p "Введите максимальное количество конфигураций на одного пользователя (например, 3): " MAX_USER_CONFIGS
+MAX_USER_CONFIGS="$(echo "$MAX_USER_CONFIGS" | xargs)"
+if ! [[ "$MAX_USER_CONFIGS" =~ ^[0-9]+$ ]] || [ -z "$MAX_USER_CONFIGS" ]; then
+  echo "Ошибка: MAX_USER_CONFIGS должен быть числом и не может быть пустым."
+  exit 1
+fi
+
+echo
 echo "Вы ввели:"
-echo "  BOT_TOKEN    = \"$BOT_TOKEN\""
-echo "  ADMIN_ID     = \"$ADMIN_ID\""
-echo "  FILEVPN_NAME = \"$FILEVPN_NAME\""
+echo "  BOT_TOKEN      = \"$BOT_TOKEN\""
+echo "  ADMIN_ID       = \"$ADMIN_ID\""
+echo "  FILEVPN_NAME    = \"$FILEVPN_NAME\""
+echo "  MAX_USER_CONFIGS = \"$MAX_USER_CONFIGS\""
 echo
 
 ### 4) Сохранение переменных в /root/.env (UTF-8 без BOM)
@@ -85,6 +94,7 @@ cat > "/root/.env" <<EOF
 BOT_TOKEN=$BOT_TOKEN
 ADMIN_ID=$ADMIN_ID
 FILEVPN_NAME=$FILEVPN_NAME
+MAX_USER_CONFIGS=$MAX_USER_CONFIGS
 EOF
 # Убедимся, что файл UTF-8:
 iconv -f utf-8 -t utf-8 "/root/.env" -o "/root/.env.tmp" && mv "/root/.env.tmp" "/root/.env"
@@ -93,7 +103,7 @@ echo
 
 ### 5) Клонирование репозитория во временную папку
 TMP_DIR="/tmp/antizapret-install"
-GIT_URL="https://github.com/VATAKATru61/TG-Bot-OpenVPN-Antizapret.git"
+GIT_URL="https://github.com/VATAKATru61/TG-Bot-OpenVPN-Antizapret.git" # Укажите свой репозиторий, если он публичный
 BRANCH="main"
 
 if [ -d "$TMP_DIR" ]; then
@@ -314,12 +324,13 @@ echo "  ● Смотреть логи:        journalctl -u vpnbot -f"
 echo
 echo "Основные пути и параметры:"
 echo "  ● /root/antizapret       — скопировано из репозитория antizapret/"
-echo "  ● /etc/openvpn          — скопировано из репозитория etc/openvpn/"
+echo "  ● /etc/openvpn           — скопировано из репозитория etc/openvpn/"
 echo "  ● /etc/openvpn/easyrsa3  — скопирован easy-rsa"
-echo "  ● /root                 — скопировано из репозитория root/ (bot.py, client.sh, requirements.txt и т. д.)"
+echo "  ● /root                  — скопировано из репозитория root/ (bot.py, client.sh, requirements.txt и т. д.)"
 echo "  ● Виртуальное окружение: /root/venv"
 echo "  ● Файл с переменными:    /root/.env"
-echo "       • BOT_TOKEN    = $BOT_TOKEN"
-echo "       • ADMIN_ID     = $ADMIN_ID"
-echo "       • FILEVPN_NAME = $FILEVPN_NAME"
+echo "        • BOT_TOKEN      = $BOT_TOKEN"
+echo "        • ADMIN_ID       = $ADMIN_ID"
+echo "        • FILEVPN_NAME   = $FILEVPN_NAME"
+echo "        • MAX_USER_CONFIGS = $MAX_USER_CONFIGS"
 echo "=============================================="

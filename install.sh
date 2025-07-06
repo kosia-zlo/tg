@@ -114,25 +114,8 @@ if ! [[ "$MAX_USER_CONFIGS" =~ ^[0-9]+$ ]] || [ -z "$MAX_USER_CONFIGS" ]; then
   exit 1
 fi
 
-echo
-read -p "Введите IP-адрес вашего сервера (YOUR_SERVER_IP, например, 123.45.67.89): " YOUR_SERVER_IP
-YOUR_SERVER_IP="$(echo "$YOUR_SERVER_IP" | xargs)"
-if [ -z "$YOUR_SERVER_IP" ]; then
-  echo "Ошибка: YOUR_SERVER_IP не может быть пустым."
-  exit 1
-fi
-
-read -p "Введите порт OpenVPN на вашем сервере (YOUR_SERVER_OVPN_PORT, по умолчанию 1194): " YOUR_SERVER_OVPN_PORT
-YOUR_SERVER_OVPN_PORT=${YOUR_SERVER_OVPN_PORT:-1194}
-YOUR_SERVER_OVPN_PORT="$(echo "$YOUR_SERVER_OVPN_PORT" | xargs)"
-if ! [[ "$YOUR_SERVER_OVPN_PORT" =~ ^[0-9]+$ ]]; then
-  echo "Ошибка: YOUR_SERVER_OVPN_PORT должен быть числом."
-  exit 1
-fi
-
-read -p "Введите DNS-серверы через запятую (DNS_SERVERS, по умолчанию 8.8.8.8, 8.8.4.4): " DNS_SERVERS
-DNS_SERVERS=${DNS_SERVERS:-"8.8.8.8, 8.8.4.4"}
-DNS_SERVERS="$(echo "$DNS_SERVERS" | xargs)"
+# YOUR_SERVER_IP, YOUR_SERVER_OVPN_PORT, DNS_SERVERS больше не запрашиваются
+# и будут управляться скриптами AntiZapret-VPN или использоваться из client.sh напрямую
 
 echo
 echo "Вы ввели:"
@@ -140,9 +123,8 @@ echo "  BOT_TOKEN          = \"$BOT_TOKEN\""
 echo "  ADMIN_ID           = \"$ADMIN_ID\""
 echo "  FILEVPN_NAME       = \"$FILEVPN_NAME\""
 echo "  MAX_USER_CONFIGS   = \"$MAX_USER_CONFIGS\""
-echo "  YOUR_SERVER_IP     = \"$YOUR_SERVER_IP\""
-echo "  YOUR_SERVER_OVPN_PORT= \"$YOUR_SERVER_OVPN_PORT\""
-echo "  DNS_SERVERS        = \"$DNS_SERVERS\""
+# YOUR_SERVER_IP, YOUR_SERVER_OVPN_PORT, DNS_SERVERS больше не выводятся
+
 echo
 
 ### 4) Сохранение переменных в /root/.env (UTF-8 без BOM)
@@ -152,9 +134,6 @@ BOT_TOKEN=$BOT_TOKEN
 ADMIN_ID=$ADMIN_ID
 FILEVPN_NAME=$FILEVPN_NAME
 MAX_USER_CONFIGS=$MAX_USER_CONFIGS
-YOUR_SERVER_IP=$YOUR_SERVER_IP
-YOUR_SERVER_OVPN_PORT=$YOUR_SERVER_OVPN_PORT
-DNS_SERVERS=$DNS_SERVERS
 EOF
 # Убедимся, что файл UTF-8:
 iconv -f utf-8 -t utf-8 "/root/.env" -o "/root/.env.tmp" && mv "/root/.env.tmp" "/root/.env"
@@ -301,12 +280,15 @@ done || true
 # 7.3) В /root/bot.py и /root/client.sh
 for f in /root/bot.py /root/client.sh; do
   if [ -f "$f" ]; then
-    # Замена IP, порта и DNS в client.sh
+    # Удаляем замену IP, порта и DNS в client.sh, так как это будет управляться AntiZapret-VPN
     if [ "$f" == "/root/client.sh" ]; then
-        sed -i "s|^\(VPN_SERVER_IP=\).*|\1\"${YOUR_SERVER_IP}\"|" "$f"
-        sed -i "s|^\(VPN_SERVER_PORT=\).*|\1\"${YOUR_SERVER_OVPN_PORT}\"|" "$f"
-        sed -i "s|^\(DNS_SERVERS=\).*|\1\"${DNS_SERVERS}\"|" "$f"
-        echo "  Заменены IP, порт, DNS в $f"
+        # Удаляем строки, которые пытаются заменить IP, PORT, DNS_SERVERS
+        sed -i '/sed -i "s|YOUR_SERVER_IP|/d' "$f"
+        sed -i '/sed -i "s|YOUR_SERVER_PORT|/d' "$f"
+        sed -i '/sed -i "s|DNS_SERVERS|/d' "$f"
+        sed -i '/^remote \$VPN_SERVER_IP \$VPN_SERVER_PORT/d' "$f" # Удаляем строку с remote, она должна быть в template
+        sed -i '/^dhcp-option DNS/d' "$f" # Удаляем строки с dhcp-option, они должны быть в template или push'ится сервером
+        echo "  Удалены замены IP, порта, DNS из $f"
     fi
 
     # Замена FILEVPN_NAME (только если шаблон есть в файле)
@@ -424,7 +406,5 @@ echo "        • BOT_TOKEN          = $BOT_TOKEN"
 echo "        • ADMIN_ID           = $ADMIN_ID"
 echo "        • FILEVPN_NAME        = $FILEVPN_NAME"
 echo "        • MAX_USER_CONFIGS   = $MAX_USER_CONFIGS"
-echo "        • YOUR_SERVER_IP     = $YOUR_SERVER_IP"
-echo "        • YOUR_SERVER_OVPN_PORT= $YOUR_SERVER_OVPN_PORT"
-echo "        • DNS_SERVERS        = $DNS_SERVERS"
+# YOUR_SERVER_IP, YOUR_SERVER_OVPN_PORT, DNS_SERVERS больше не выводятся
 echo "=============================================="

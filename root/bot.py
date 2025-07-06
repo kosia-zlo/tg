@@ -34,10 +34,8 @@ ADMIN_ID = os.getenv("ADMIN_ID")
 FILEVPN_NAME = os.getenv("FILEVPN_NAME")
 MAX_USER_CONFIGS = int(os.getenv("MAX_USER_CONFIGS", 3))
 
-# === ИСПРАВЛЕНИЕ ЗДЕСЬ (УБЕДИТЕСЬ, ЧТО ЭТА СТРОКА ТЕПЕРЬ ТАКАЯ!) ===
 # YOUR_SITE должен быть просто доменным именем без "https://"
 YOUR_SITE = "kosia-zlo.github.io/mysite/index.html"
-# === КОНЕЦ ИСПРАВЛЕНИЯ ===
 
 
 # Константы
@@ -137,28 +135,43 @@ async def execute_command(command, *args):
 # Раздел для пользовательских функций (User)
 # =========================================================================
 
+# Функция для получения количества конфигураций пользователя
+def get_user_configs_count(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM configs WHERE user_id = ?", (user_id,))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
 # Функция создания главного меню для пользователя
-def get_user_main_menu():
+def get_user_main_menu(user_id):
+    configs_count = get_user_configs_count(user_id) # Получаем количество конфигураций
+    
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="🔑 Мои VPN-конфигурации", callback_data="my_configs"),
             ],
             [
+                # Добавляем кнопку с количеством конфигураций
+                InlineKeyboardButton(text=f"📊 Конфигураций: {configs_count}/{MAX_USER_CONFIGS}", callback_data="view_config_count"),
+            ],
+            [
                 InlineKeyboardButton(text="➕ Создать VPN-конфигурацию", callback_data="create_config"),
             ],
             [
-                InlineKeyboardButton(text="⚙️ Управление VPN", callback_data="manage_vpn"), # Кнопка для VPN-статуса
+                InlineKeyboardButton(text="⚙️ Управление VPN", callback_data="manage_vpn"),
             ],
             [
                 InlineKeyboardButton(text="💰 Баланс и пополнить", callback_data="balance_topup"),
             ],
             [
-                # === ИСПРАВЛЕНИЕ ЗДЕСЬ: Теперь добавляем "https://" явно ===
                 InlineKeyboardButton(text="🔗 Наш сайт", url=f"https://{YOUR_SITE}"),
             ],
             [
-                InlineKeyboardButton(text="🙋‍♀️ Поддержка", url="https://t.me/kosiazlo"), # Замените на вашу ссылку поддержки
+                # Изменяем ссылку на поддержку
+                InlineKeyboardButton(text="🙋‍♀️ Поддержка", url="https://t.me/krackqw"), 
             ],
         ]
     )
@@ -196,7 +209,7 @@ async def start(message: Message):
             f"Добро пожаловать в VPN-бот, {username}!\n\n"
             "Я помогу вам управлять вашими VPN-конфигурациями.\n"
             "Для начала создайте свою первую конфигурацию.",
-            reply_markup=get_user_main_menu() # Здесь вызывается функция создания меню
+            reply_markup=get_user_main_menu(user_id) # Теперь передаем user_id
         )
         logger.info(f"Новый пользователь зарегистрирован: {username} ({user_id})")
     else:
@@ -209,11 +222,21 @@ async def start(message: Message):
         await message.answer(
             f"Снова здравствуйте, {username}!\n\n"
             "Ваше главное меню:",
-            reply_markup=get_user_main_menu() # Здесь вызывается функция создания меню
+            reply_markup=get_user_main_menu(user_id) # Теперь передаем user_id
         )
         logger.info(f"Пользователь вернулся: {username} ({user_id})")
 
     conn.close()
+
+# Хендлер для новой кнопки "Конфигураций: X/Y"
+@router.callback_query(F.data == "view_config_count")
+async def handle_view_config_count(callback_query: Message):
+    user_id = callback_query.from_user.id
+    configs_count = get_user_configs_count(user_id)
+    await callback_query.answer(f"У вас {configs_count} из {MAX_USER_CONFIGS} конфигураций.", show_alert=True)
+    # Если вы хотите обновить сообщение с клавиатурой, используйте edit_message_reply_markup
+    # await callback_query.message.edit_reply_markup(reply_markup=get_user_main_menu(user_id))
+
 
 # ... (Все остальные хендлеры и функции) ...
 

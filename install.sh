@@ -1,9 +1,10 @@
 #!/bin/bash
 #
 # Установочный скрипт для VPN-бота (TG-Bot-OpenVPN-Antizapret)
-# Версия: v2.9.6
+# Версия: v2.9.7
 # Логика PKI: PKI никогда не создается и не инициализируется этим скриптом.
 #           Только сообщает о наличии AntiZapret-VPN.
+# Исправлена замена URL в install.sh для предотвращения дублирования https://
 
 set -e
 
@@ -14,7 +15,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo "=============================================="
-echo "Установка VPN-бота (TG-Bot-OpenVPN-Antizapret) v2.9.6 (для OpenVPN)"
+echo "Установка VPN-бота (TG-Bot-OpenVPN-Antizapret) v2.9.7 (для OpenVPN)"
 echo "=============================================="
 echo
 
@@ -286,13 +287,13 @@ for f in /root/bot.py /root/antizapret/client.sh; do
   fi
 done
 
-# Заменяем bi4i.ru на kosia-zlo.github.io/mysite/index.html во всех файлах, которые копируются в /root/
-# Используем find и grep для поиска и sed для замены. Исключаем бинарные файлы.
-echo "  Замена упоминаний bi4i.ru на kosia-zlo.github.io/mysite/index.html..."
-# Используем -I (или --binary-files=without-match) для grep, чтобы игнорировать бинарные файлы.
-# Затем xargs -0 передает список файлов, разделенных null-символами, в sed -i.
-find /root -type f -exec grep -lIZ "bi4i.ru" {} + | xargs -0 sed -i 's|bi4i.ru|https://kosia-zlo.github.io/mysite/index.html|g'
+# === ИСПРАВЛЕНИЕ ЗДЕСЬ ===
+# Заменяем bi4i.ru на kosia-zlo.github.io/mysite/index.html ВОТ ТАК:
+# УДАЛЯЕМ ЛИШНИЙ HTTPS:// из строки замены, чтобы не было дублирования
+echo "  Замена упоминаний bi4i.ru на kosia-zlo.github.io/mysite/index.html (без https://)..."
+find /root -type f -exec grep -lIZ "bi4i.ru" {} + | xargs -0 sed -i 's|bi4i.ru|kosia-zlo.github.io/mysite/index.html|g'
 echo "  Замена ссылок завершена."
+# === КОНЕЦ ИСПРАВЛЕНИЯ ===
 
 echo
 

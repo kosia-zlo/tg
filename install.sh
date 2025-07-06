@@ -16,7 +16,7 @@ echo "=============================================="
 echo
 
 ### 1) Установка системных пакетов (git, wget, curl, python3-venv, python3-pip, easy-rsa)
-echo "=== Шаг 1: Установка системных пакетов ==-"
+echo "=== Шаг 1: Установка системных пакетов ==="
 apt update -qq
 
 REQUIRED_PKG=("git" "wget" "curl" "python3-venv" "python3-pip" "easy-rsa")
@@ -32,7 +32,7 @@ done
 echo
 
 ### 2) Копирование easy-rsa в /etc/openvpn/easyrsa3
-echo "=== Шаг 2: Настройка easy-rsa → /etc/openvpn/easyrsa3 ==-"
+echo "=== Шаг 2: Настройка easy-rsa → /etc/openvpn/easyrsa3 ==="
 EASY_SRC="/usr/share/easy-rsa"
 EASY_DST="/etc/openvpn/easyrsa3"
 
@@ -49,7 +49,7 @@ fi
 echo
 
 ### 3) Запрос BOT_TOKEN, ADMIN_ID, FILEVPN_NAME и MAX_USER_CONFIGS
-echo "=== Шаг 3: Настройка параметров бота ==-"
+echo "=== Шаг 3: Настройка параметров бота ==="
 read -p "Введите BOT_TOKEN (токен из BotFather): " BOT_TOKEN
 BOT_TOKEN="$(echo "$BOT_TOKEN" | xargs)"
 if [ -z "$BOT_TOKEN" ]; then
@@ -89,7 +89,7 @@ echo "  MAX_USER_CONFIGS = \"$MAX_USER_CONFIGS\""
 echo
 
 ### 4) Сохранение переменных в /root/.env (UTF-8 без BOM)
-echo "=== Шаг 4: Запись переменных в /root/.env ==-"
+echo "=== Шаг 4: Запись переменных в /root/.env ==="
 cat > "/root/.env" <<EOF
 BOT_TOKEN=$BOT_TOKEN
 ADMIN_ID=$ADMIN_ID
@@ -111,7 +111,7 @@ if [ -d "$TMP_DIR" ]; then
   rm -rf "$TMP_DIR"
 fi
 
-echo "=== Шаг 5: Клонируем репозиторий в $TMP_DIR ==-"
+echo "=== Шаг 5: Клонируем репозиторий в $TMP_DIR ==="
 git clone "$GIT_URL" "$TMP_DIR"
 cd "$TMP_DIR"
 git checkout "$BRANCH"
@@ -123,7 +123,7 @@ git reset --hard "origin/$BRANCH"
 echo
 
 ### 6) Копирование подпапок в целевые директории (перезапись без удаления остального)
-echo "=== Шаг 6: Копирование файлов из временного клона ==-"
+echo "=== Шаг 6: Копирование файлов из временного клона ==="
 
 # 6.1) antizapret → /root/antizapret
 SRC_ANTIZAPRET="$TMP_DIR/antizapret"
@@ -178,7 +178,7 @@ echo "Копирование завершено."
 echo
 
 ### 7) Замена "${FILEVPN_NAME}" и "$FILEVPN_NAME", затем приведём файлы в UTF-8
-echo "=== Шаг 7: Замена \"\${FILEVPN_NAME}\" и \"\$FILEVPN_NAME\" → \"$FILEVPN_NAME\" (UTF-8) ==-"
+echo "=== Шаг 7: Замена \"\${FILEVPN_NAME}\" и \"\$FILEVPN_NAME\" → \"$FILEVPN_NAME\" (UTF-8) ==="
 
 # Функция для перекодирования в UTF-8
 recode_to_utf8() {
@@ -233,7 +233,7 @@ done
 echo
 
 ### 8) Принудительное пересоздание виртуального окружения и установка зависимостей
-echo "=== Шаг 8: Пересоздание виртуального окружения и установка зависимостей ==-"
+echo "=== Шаг 8: Пересоздание виртуального окружения и установка зависимостей ==="
 VENV_DIR="/root/venv"
 
 if [ -d "$VENV_DIR" ]; then
@@ -257,7 +257,7 @@ deactivate
 echo
 
 ### 9) Даем всем скопированным файлам права 777
-echo "=== Шаг 9: Полные права (777) всем скопированным файлам ==-"
+echo "=== Шаг 9: Полные права (777) всем скопированным файлам ==="
 if [ -d "/root/antizapret" ]; then
   chmod -R 777 "/root/antizapret"
   echo "  Права 777 выставлены на /root/antizapret"
@@ -282,7 +282,7 @@ fi
 echo
 
 ### 10) Создание systemd-юнита vpnbot.service
-echo "=== Шаг 10: Создание systemd-юнита /etc/systemd/system/vpnbot.service ==-"
+echo "=== Шаг 10: Создание systemd-юнита /etc/systemd/system/vpnbot.service ==="
 cat > /etc/systemd/system/vpnbot.service <<EOF
 [Unit]
 Description=VPN Telegram Bot
@@ -306,7 +306,7 @@ echo "  Юнит записан: /etc/systemd/system/vpnbot.service"
 echo
 
 ### 11) Перезагрузка systemd, автозапуск, запуск службы
-echo "=== Шаг 11: Перезагрузка systemd и запуск vpnbot.service ==-"
+echo "=== Шаг 11: Перезагрузка systemd и запуск vpnbot.service ==="
 systemctl daemon-reload
 systemctl enable vpnbot.service
 systemctl restart vpnbot.service

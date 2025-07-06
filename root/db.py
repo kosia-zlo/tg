@@ -1,289 +1,192 @@
+import sqlite3
 import logging
-import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+class Database:
+    def __init__(self, db_file):
+        self.db_file = db_file
+        self.conn = None
+        self.cursor = None
+        self.connect()
+        self.create_tables()
 
-from antizapret.db import Database
-from antizapret.wg_manager import WireGuardManager # Ваш wg_manager
-
-# --- Загрузка переменных окружения ---
-# Убедитесь, что переменные окружения загружены до этого момента (например, через systemd Unit)
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = int(os.getenv('ADMIN_ID'))
-FILEVPN_NAME = os.getenv('FILEVPN_NAME')
-MAX_USER_CONFIGS = int(os.getenv('MAX_USER_CONFIGS', 3)) # По умолчанию 3, если не установлено
-
-# --- Инициализация ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-bot = Bot(token=BOT_TOKEN)
-storage = MemoryStorage()
-dp = Dispatcher(bot, storage=storage)
-
-db = Database('vpn_bot.db') # Инициализируем объект базы данных. Файл vpn_bot.db будет создан в /root/
-
-# Инициализация wg_manager с путями и именем файла VPN из .env
-# Если у вас OpenVPN, пути будут другими и нужен другой менеджер
-wg_manager = WireGuardManager(
-    easyrsa_path='/etc/openvpn/easyrsa3', # Для OpenVPN
-    server_config_dir='/etc/openvpn/server', # Для OpenVPN
-    filevpn_name=FILEVPN_NAME # Используется для генерации имени клиента
-)
-
-# --- FSM States ---
-class ConfigCreationStates(StatesGroup):
-    waiting_for_config_name = State() # Состояние для ожидания имени нового конфига
-
-# --- Вспомогательные функции ---
-def generate_client_name(username, user_id):
-    """
-    Генерирует уникальное имя для клиента WireGuard.
-    Использует FILEVPN_NAME из переменных окружения, имя пользователя и часть timestamp.
-    Это имя будет использоваться внутренне (для ключей WireGuard и в базе данных).
-    """
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    # Ограничиваем длину имени пользователя, если оно слишком длинное для имени файла/ключа
-    clean_username = "".join(c for c in username if c.isalnum() or c in ('-', '_')).strip()
-    if len(clean_username) > 15:
-        clean_username = clean_username[:15]
-    return f"{FILEVPN_NAME}_{clean_username}_{user_id}_{timestamp}"[:50] # Ограничим общую длину
-
-async def send_config_to_user(message: types.Message, client_custom_name: str, config_content: str):
-    """
-    Отправляет сгенерированный конфиг пользователю.
-    client_custom_name - это имя, которое пользователь дал конфигу.
-    """
-    file_path = f"/tmp/{client_custom_name}.conf"
-    try:
-        with open(file_path, "w") as f:
-            f.write(config_content)
-
-        with open(file_path, "rb") as f:
-            await message.answer_document(f, caption=f"Ваш новый конфигурационный файл для устройства **{client_custom_name}**:\n\n", parse_mode="Markdown")
-            await message.answer("Скопируйте содержимое файла в приложение OpenVPN (или WireGuard, если вы его используете) или скачайте его.")
-
-        os.remove(file_path)
-        logging.info(f"Config {client_custom_name} sent and temp file removed for user {message.from_user.id}")
-        return True
-    except Exception as e:
-        logging.error(f"Error sending config {client_custom_name} to user {message.from_user.id}: {e}")
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        return False
-
-# --- Обработчики команд ---
-
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: types.Message):
-    user_id = message.from_user.id
-    username = message.from_user.username if message.from_user.username else message.from_user.first_name
-    db.add_user(user_id, username) # Добавляем пользователя в БД, если его нет
-
-    keyboard = InlineKeyboardMarkup(row_width=1)
-    keyboard.add(
-        InlineKeyboardButton("Создать VPN-конфиг", callback_data="generate_config"),
-        InlineKeyboardButton("Мои конфиги", callback_data="my_configs"),
-        InlineKeyboardButton("Как подключиться?", callback_data="how_to_connect"),
-        InlineKeyboardButton("Поддержать проект", callback_data="donate")
-    )
-    await message.answer(
-        f"Привет, **{username}**!\n"
-        "Этот бот поможет вам создать и управлять VPN-конфигурациями.",
-        reply_markup=keyboard, parse_mode="Markdown"
-    )
-    logging.info(f"User {user_id} started bot.")
-
-@dp.callback_query_handler(text="generate_config")
-async def generate_config_entry_point(call: CallbackQuery, state: FSMContext):
-    user_id = call.from_user.id
-    
-    # Проверяем лимит активных конфигов
-    user_configs_count = db.get_user_configs_count(user_id)
-    if user_configs_count >= MAX_USER_CONFIGS: # Используем MAX_USER_CONFIGS из .env
-        await call.message.answer(
-            f"Вы достигли лимита в {MAX_USER_CONFIGS} активных конфигураций. "
-            "Для создания новой, пожалуйста, удалите одну из существующих через 'Мои конфиги'."
-        )
-        await call.answer()
-        return
-    
-    # Если лимит не превышен, запрашиваем имя для конфига
-    await call.message.answer("Введите название для нового VPN-конфига (например, 'Мой телефон', 'Ноутбук'):")
-    await ConfigCreationStates.waiting_for_config_name.set() # Переходим в состояние ожидания имени
-    await call.answer()
-    logging.info(f"User {user_id} prompted for config name.")
-
-
-@dp.message_handler(state=ConfigCreationStates.waiting_for_config_name)
-async def process_config_name(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    username = message.from_user.username if message.from_user.username else message.from_user.first_name
-    client_custom_name = message.text.strip() # Пользовательское имя для конфига
-
-    if not client_custom_name:
-        await message.answer("Название конфига не может быть пустым. Пожалуйста, введите название:")
-        return
-
-    # Проверяем, существует ли уже конфиг с таким ПОЛЬЗОВАТЕЛЬСКИМ именем у этого пользователя
-    existing_clients = db.get_user_clients(user_id)
-    if any(c['client_name'].lower() == client_custom_name.lower() for c in existing_clients if c['is_active']):
-        await message.answer("Конфиг с таким названием уже существует. Пожалуйста, выберите другое название:")
-        await state.reset_state(with_data=False) # Сбрасываем состояние, чтобы пользователь мог начать заново
-        return
-
-    # Проверяем лимит еще раз на случай гонки
-    user_configs_count = db.get_user_configs_count(user_id)
-    if user_configs_count >= MAX_USER_CONFIGS:
-        await message.answer(
-            f"Вы достигли лимита в {MAX_USER_CONFIGS} активных конфигураций. "
-            "Для создания новой, пожалуйста, удалите одну из существующих через 'Мои конфиги'."
-        )
-        await state.finish()
-        return
-
-    # Генерируем уникальное имя для WireGuard на основе пользовательского имени и ID
-    # Это имя будет использоваться в файлах OpenVPN и в базе данных для WireGuard
-    wg_client_name = generate_client_name(username, user_id)
-    
-    await message.answer(f"Создаю VPN-конфиг с именем: **{client_custom_name}**...", parse_mode="Markdown")
-
-    try:
-        private_key, public_key = wg_manager.generate_key_pair()
-        
-        # Добавляем клиента в WireGuard (используем wg_client_name как идентификатор)
-        # client_ip будет возвращен и использован в конфиге
-        client_ip = wg_manager.add_client(wg_client_name, public_key)
-        
-        # Сохраняем в базу данных пользовательское имя и публичный ключ (который используется в WG)
-        db.add_client(user_id, client_custom_name, public_key) 
-
-        config_content = wg_manager.generate_client_config(private_key, public_key, client_ip)
-
-        success = await send_config_to_user(message, client_custom_name, config_content)
-        if success:
-            await message.answer("Готово! Ваш новый VPN-конфиг создан.")
-        else:
-            await message.answer("Произошла ошибка при отправке конфига.")
-    except Exception as e:
-        logging.error(f"Error generating or sending config for user {user_id} with name {client_custom_name}: {e}")
-        await message.answer("Произошла ошибка при создании конфига. Пожалуйста, попробуйте позже.")
-
-    await state.finish()
-    logging.info(f"Config creation finished for user {user_id}.")
-
-
-@dp.callback_query_handler(text="my_configs")
-async def my_configs_command(call: CallbackQuery):
-    user_id = call.from_user.id
-    clients = db.get_user_clients(user_id)
-
-    active_clients = [c for c in clients if c['is_active']]
-
-    if not active_clients:
-        await call.message.answer("У вас пока нет активных конфигурационных файлов.")
-        await call.answer()
-        return
-
-    text = "Ваши активные конфигурационные файлы:\n\n"
-    keyboard = InlineKeyboardMarkup(row_width=1)
-
-    for client in active_clients:
-        # client['client_name'] - это то, что ввёл пользователь
-        text += f"▪️ **{client['client_name']}**\n"
-        keyboard.add(InlineKeyboardButton(f"Удалить {client['client_name']}", callback_data=f"delete_config_{client['id']}"))
-
-    await call.message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
-    await call.answer()
-    logging.info(f"User {user_id} requested my_configs.")
-
-
-@dp.callback_query_handler(text_startswith="delete_config_")
-async def delete_config_callback(call: CallbackQuery):
-    client_id = int(call.data.split('_')[2])
-    user_id = call.from_user.id
-
-    client_data = db.get_client_by_id(client_id)
-
-    if not client_data or client_data['user_id'] != user_id:
-        await call.answer("Ошибка: Конфигурация не найдена или принадлежит другому пользователю.", show_alert=True)
-        logging.warning(f"User {user_id} tried to delete config {client_id} belonging to another user or non-existent.")
-        return
-
-    if not client_data['is_active']:
-        await call.answer("Эта конфигурация уже неактивна.", show_alert=True)
-        logging.warning(f"User {user_id} tried to delete already inactive config {client_id}.")
-        return
-
-    # Деактивируем конфиг в базе данных
-    if db.set_client_inactive(client_id):
-        # Удаляем клиента из WireGuard по его public_key
+    def connect(self):
         try:
-            wg_manager.remove_client(client_data['public_key'])
-            logging.info(f"Client {client_data['client_name']} (WG: {client_data['public_key']}) removed from WireGuard.")
-        except Exception as e:
-            logging.error(f"Error removing client {client_data['client_name']} from WireGuard: {e}")
-            await call.message.answer("Внимание: Конфигурация удалена из базы, но не удалось удалить из WireGuard. Обратитесь к администратору.")
+            self.conn = sqlite3.connect(self.db_file)
+            self.cursor = self.conn.cursor()
+            logging.info("Connected to database.")
+        except sqlite3.Error as e:
+            logging.error(f"Database connection error: {e}")
 
+    def close(self):
+        if self.conn:
+            self.conn.close()
+            logging.info("Database connection closed.")
 
-        await call.message.answer(f"Конфигурация **{client_data['client_name']}** успешно удалена.", parse_mode="Markdown")
-    else:
-        await call.message.answer("Произошла ошибка при удалении конфигурации.")
-        logging.error(f"Error setting client {client_id} inactive in DB for user {user_id}.")
-    
-    await call.answer()
-    
-    # Обновим сообщение с конфигами
-    active_clients_after_deletion = [c for c in db.get_user_clients(user_id) if c['is_active']]
-    if active_clients_after_deletion:
-        # Редактируем предыдущее сообщение, если возможно, или отправляем новое
+    def create_tables(self):
         try:
-            text = "Ваши активные конфигурационные файлы:\n\n"
-            keyboard = InlineKeyboardMarkup(row_width=1)
-            for client in active_clients_after_deletion:
-                text += f"▪️ **{client['client_name']}**\n"
-                keyboard.add(InlineKeyboardButton(f"Удалить {client['client_name']}", callback_data=f"delete_config_{client['id']}"))
-            await call.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
-        except Exception as e:
-            # Если сообщение не может быть отредактировано (например, слишком старое), отправляем новое
-            logging.warning(f"Could not edit message for user {user_id} after deletion: {e}. Sending new one.")
-            await call.message.answer("Ваши активные конфигурационные файлы (обновлено):", reply_markup=InlineKeyboardMarkup(row_width=1).add(
-                *[InlineKeyboardButton(f"Удалить {c['client_name']}", callback_data=f"delete_config_{c['id']}") for c in active_clients_after_deletion]
-            ), parse_mode="Markdown")
-    else:
-        await call.message.answer("У вас больше нет активных конфигурационных файлов.")
+            # Таблица пользователей с полями для будущих подписок
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    is_admin BOOLEAN DEFAULT FALSE,
+                    subscribed BOOLEAN DEFAULT TRUE, -- По умолчанию все подписаны, пока нет оплаты
+                    subscription_end_date TEXT -- Дата окончания подписки, пока не используется активно
+                )
+            ''')
+            # Таблица клиентов (конфигураций)
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS clients (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    client_name TEXT UNIQUE, -- Имя, которое вводит пользователь (например, "Мой телефон")
+                    common_name TEXT UNIQUE, -- Common Name OpenVPN (используется для OpenVPN)
+                    is_active BOOLEAN DEFAULT TRUE, -- Активен ли конфиг (можно удалить)
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP, -- Дата создания
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            ''')
+            self.conn.commit()
+            logging.info("Tables checked/created successfully.")
+        except sqlite3.Error as e:
+            logging.error(f"Error creating tables: {e}")
 
+    def add_user(self, user_id, username):
+        """Добавляет нового пользователя в базу данных или обновляет, если он уже существует."""
+        try:
+            self.cursor.execute("INSERT OR IGNORE INTO users (id, username, subscribed) VALUES (?, ?, ?)", (user_id, username, True))
+            self.conn.commit()
+            logging.info(f"User {user_id} added or already exists.")
+            return True
+        except sqlite3.Error as e:
+            logging.error(f"Error adding user {user_id}: {e}")
+            return False
 
-@dp.callback_query_handler(text="how_to_connect")
-async def how_to_connect_handler(call: CallbackQuery):
-    instructions = (
-        "**Как подключиться к VPN:**\n\n"
-        "1. **Загрузите приложение WireGuard:**\n" # Изменено на WireGuard
-        "   - [Android](https://play.google.com/store/apps/details?id=com.wireguard.android)\n"
-        "   - [iOS](https://apps.apple.com/us/app/wireguard/id1441195295)\n"
-        "   - [Windows](https://download.wireguard.com/windows-client/wireguard-installer.exe)\n"
-        "   - [macOS](https://itunes.apple.com/us/app/wireguard/id1451895079)\n"
-        "2. **Импортируйте конфигурационный файл:**\n"
-        "   - **На телефоне:** Откройте WireGuard, нажмите '+' или 'Добавить туннель', выберите 'Импортировать из файла' и укажите файл, который прислал бот.\n"
-        "   - **На компьютере:** Откройте WireGuard, выберите 'Импорт файла' и укажите скачанный файл.\n"
-        "3. **Подключитесь:** После импорта активируйте туннель в приложении WireGuard."
-    )
-    await call.message.answer(instructions, parse_mode="Markdown", disable_web_page_preview=True)
-    await call.answer()
+    def get_user(self, user_id):
+        """Получает информацию о пользователе по его ID."""
+        try:
+            self.cursor.execute("SELECT id, username, is_admin, subscribed, subscription_end_date FROM users WHERE id = ?", (user_id,))
+            user_data = self.cursor.fetchone()
+            if user_data:
+                return {
+                    'id': user_data[0],
+                    'username': user_data[1],
+                    'is_admin': bool(user_data[2]),
+                    'subscribed': bool(user_data[3]),
+                    'subscription_end_date': user_data[4]
+                }
+            return None
+        except sqlite3.Error as e:
+            logging.error(f"Error getting user {user_id}: {e}")
+            return None
 
-@dp.callback_query_handler(text="donate")
-async def donate_handler(call: CallbackQuery):
-    await call.message.answer(
-        "Спасибо за вашу поддержку! Вы можете отправить донат в TON на адрес:\n"
-        "`ВАШ_TON_АДРЕС`\n" # Замените на ваш реальный TON-адрес
-    )
-    await call.answer()
+    def update_user_subscription(self, user_id, subscribed: bool, subscription_end_date: datetime = None):
+        """Обновляет статус подписки пользователя. Пока не используется активно."""
+        try:
+            end_date_str = subscription_end_date.isoformat() if subscription_end_date else None
+            self.cursor.execute(
+                "UPDATE users SET subscribed = ?, subscription_end_date = ? WHERE id = ?",
+                (subscribed, end_date_str, user_id)
+            )
+            self.conn.commit()
+            logging.info(f"Subscription updated for user {user_id} to {subscribed}, ends {end_date_str}.")
+            return True
+        except sqlite3.Error as e:
+            logging.error(f"Error updating user subscription for user {user_id}: {e}")
+            return False
 
-# --- Запуск бота ---
-if __name__ == '__main__':
-    logging.info("Bot started.")
-    executor.start_polling(dp, skip_updates=True)
+    def get_all_users(self):
+        """Получает список всех пользователей."""
+        try:
+            self.cursor.execute("SELECT id, username, is_admin, subscribed, subscription_end_date FROM users")
+            users = self.cursor.fetchall()
+            return [{
+                'id': u[0], 'username': u[1], 'is_admin': bool(u[2]),
+                'subscribed': bool(u[3]), 'subscription_end_date': u[4]
+            } for u in users]
+        except sqlite3.Error as e:
+            logging.error(f"Error getting all users: {e}")
+            return []
+
+    def add_client(self, user_id, client_name, common_name): # Изменено для common_name OpenVPN
+        """Добавляет новую VPN-конфигурацию для пользователя."""
+        try:
+            self.cursor.execute(
+                "INSERT INTO clients (user_id, client_name, common_name, is_active) VALUES (?, ?, ?, ?)",
+                (user_id, client_name, common_name, True) # По умолчанию активен
+            )
+            self.conn.commit()
+            logging.info(f"Client {client_name} (CN: {common_name}) added for user {user_id}.")
+            return True
+        except sqlite3.Error as e:
+            logging.error(f"Error adding client {client_name} for user {user_id}: {e}")
+            return False
+
+    def get_user_configs_count(self, user_id):
+        """Возвращает количество активных конфигураций для пользователя."""
+        try:
+            self.cursor.execute("SELECT COUNT(*) FROM clients WHERE user_id = ? AND is_active = TRUE", (user_id,))
+            count = self.cursor.fetchone()[0]
+            logging.debug(f"User {user_id} has {count} active configs.")
+            return count
+        except sqlite3.Error as e:
+            logging.error(f"Error getting user configs count for user {user_id}: {e}")
+            return 0
+
+    def get_user_clients(self, user_id):
+        """Возвращает список клиентов пользователя (конфигураций), включая неактивные."""
+        try:
+            self.cursor.execute("SELECT id, client_name, common_name, is_active FROM clients WHERE user_id = ?", (user_id,))
+            clients = self.cursor.fetchall()
+            return [{'id': c[0], 'client_name': c[1], 'common_name': c[2], 'is_active': bool(c[3])} for c in clients]
+        except sqlite3.Error as e:
+            logging.error(f"Error getting user clients for user {user_id}: {e}")
+            return []
+
+    def set_client_inactive(self, client_id):
+        """Деактивирует клиента (помечает как удаленный)."""
+        try:
+            self.cursor.execute("UPDATE clients SET is_active = FALSE WHERE id = ?", (client_id,))
+            self.conn.commit()
+            logging.info(f"Client {client_id} set to inactive.")
+            return True
+        except sqlite3.Error as e:
+            logging.error(f"Error setting client {client_id} inactive: {e}")
+            return False
+
+    def get_client_by_id(self, client_id):
+        """Получает данные клиента по его ID."""
+        try:
+            self.cursor.execute("SELECT id, user_id, client_name, common_name, is_active FROM clients WHERE id = ?", (client_id,))
+            client_data = self.cursor.fetchone()
+            if client_data:
+                return {
+                    'id': client_data[0],
+                    'user_id': client_data[1],
+                    'client_name': client_data[2],
+                    'common_name': client_data[3],
+                    'is_active': bool(client_data[4])
+                }
+            return None
+        except sqlite3.Error as e:
+            logging.error(f"Error getting client by ID {client_id}: {e}")
+            return None
+
+    def get_client_by_common_name(self, common_name): # Новый метод для OpenVPN
+        """Получает данные клиента по его Common Name."""
+        try:
+            self.cursor.execute("SELECT id, user_id, client_name, common_name, is_active FROM clients WHERE common_name = ?", (common_name,))
+            client_data = self.cursor.fetchone()
+            if client_data:
+                return {
+                    'id': client_data[0],
+                    'user_id': client_data[1],
+                    'client_name': client_data[2],
+                    'common_name': client_data[3],
+                    'is_active': bool(client_data[4])
+                }
+            return None
+        except sqlite3.Error as e:
+            logging.error(f"Error getting client by common name {common_name}: {e}")
+            return None

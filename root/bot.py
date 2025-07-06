@@ -244,21 +244,21 @@ class VPNSetup(StatesGroup):
 
 # Описание для вашего бота
 BOT_DESCRIPTION = """
-👴🕶️ БичиVPN — bi4i.ru
+👴🕶️ PrivadoVPN — https://kosia-zlo.github.io/mysite/index.html
 
 ⚡ VPN-бот для своих:
-— 🧑‍💻 Ебейший VPN который обходит только заблокированные сервисы
+— 🧑‍💻 VPN который обходит только заблокированные сервисы
 — 🕳️ Генерация конфигов OpenVPN прям в Боте
-— 🧾 Статистика на хуй никому не нужная
+— 🧾 Статистика не нужная
 — 🪣 МБ будет Vless позже)
 
 Как получить VPN?
 🪪 Жми /start, отправляй заявку, жди одобрения!
 
-🟣https://bi4i.ru/install/ Инструкция по установке и подключению
+
 """
 
-BOT_SHORT_DESCRIPTION = "👴🕶️ БичиVPN — приватный VPN за минуту! bi4i.ru"
+BOT_SHORT_DESCRIPTION = "👴🕶️ PrivadoVPN — приватный VPN за минуту!"
 
 
 #Для VLESS онлайн убери ниже #, чтоб строка начиналась с def authenticate() -> bool:
@@ -1184,7 +1184,7 @@ async def show_info_wg_vpn(callback: types.CallbackQuery):
         "• macOS 🍏\n"
         "• Linux 🐧\n\n"
         "📖 <b>Инструкция по установке:</b>\n"
-        "👉 <a href='https://bi4i.ru/install-wg/'>bi4i.ru/install-wg</a>"
+        "👉 <a href='https://kosia-zlo.github.io/mysite/faq.html'>https://kosia-zlo.github.io/mysite/faq.html</a>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Скачать конфиг", callback_data=f"download_wg_vpn_{client_name}")],
@@ -1207,7 +1207,7 @@ async def show_info_wg_antizapret(callback: types.CallbackQuery):
         "• Linux 🐧\n\n"
         "🚫 Использует DNS и маршруты обхода блокировок.\n\n"
         "📖 <b>Инструкция по установке:</b>\n"
-        "👉 <a href='https://bi4i.ru/install-wg/'>bi4i.ru/install-wg</a>"
+        "👉 <a href='https://kosia-zlo.github.io/mysite/faq.html'>https://kosia-zlo.github.io/mysite/faq.html</a>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Скачать конфиг", callback_data=f"download_wg_antizapret_{client_name}")],
@@ -1243,7 +1243,7 @@ async def show_info_am_vpn(callback: types.CallbackQuery):
         "• macOS 🍏\n\n"
         "🧾 Простой запуск через приложение Amnezia.\n\n"
         "📖 <b>Инструкция по установке:</b>\n"
-        "👉 <a href='https://bi4i.ru/install-amnezia/'>bi4i.ru/install-amnezia</a>"
+        "👉 <a href='https://kosia-zlo.github.io/mysite/faq.html'>https://kosia-zlo.github.io/mysite/faq.html</a>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Скачать конфиг", callback_data=f"download_am_vpn_{client_name}")],
@@ -1263,7 +1263,7 @@ async def show_info_am_antizapret(callback: types.CallbackQuery):
         "• macOS 🍏\n\n"
         "🚫 Использует обход блокировок через Antizapret.\n\n"
         "📖 <b>Инструкция по установке:</b>\n"
-        "👉 <a href='https://bi4i.ru/install-amnezia/'>bi4i.ru/install-amnezia</a>"
+        "👉 <a href='https://kosia-zlo.github.io/mysite/faq.html'>https://kosia-zlo.github.io/mysite/faq.html</a>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Скачать конфиг", callback_data=f"download_am_antizapret_{client_name}")],

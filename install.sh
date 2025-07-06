@@ -325,6 +325,11 @@ for f in /root/bot.py /root/client.sh; do
   fi
 done
 
+# Заменяем bi4i.ru на kosia-zlo.github.io/mysite/index.html во всех файлах, которые копируются в /root/
+# Используем find и grep для поиска и sed для замены. Исключаем бинарные файлы.
+echo "  Замена упоминаний bi4i.ru на kosia-zlo.github.io/mysite/index.html..."
+find /root -type f -exec grep -lZ "bi4i.ru" {} + | xargs -0 sed -i 's|bi4i.ru|https://kosia-zlo.github.io/mysite/index.html|g'
+echo "  Замена ссылок завершена."
 
 echo
 
@@ -426,4 +431,5 @@ echo "        • BOT_TOKEN          = $BOT_TOKEN"
 echo "        • ADMIN_ID           = $ADMIN_ID"
 echo "        • FILEVPN_NAME        = $FILEVPN_NAME"
 echo "        • MAX_USER_CONFIGS   = $MAX_USER_CONFIGS"
+echo "        • Домашняя страница проекта: https://kosia-zlo.github.io/mysite/index.html" # Добавил сюда упоминание
 echo "=============================================="

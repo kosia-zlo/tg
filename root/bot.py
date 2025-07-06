@@ -1,4 +1,4 @@
-# Импорты (оставьте их как есть, здесь только пример, что они должны быть)
+# Импорты (оставьте их как есть)
 import logging
 import sqlite3
 import asyncio
@@ -24,7 +24,7 @@ from aiogram.utils.formatting import (
 )
 
 
-# Загрузка переменных окружения (это часть вашего install.sh)
+# Загрузка переменных окружения
 from dotenv import load_dotenv
 load_dotenv(dotenv_path="/root/.env")
 
@@ -39,11 +39,11 @@ YOUR_SITE = "kosia-zlo.github.io/mysite/index.html"
 
 
 # Константы
-DB_PATH = "/root/antizapret/db.sqlite" # Путь к вашей базе данных
+DB_PATH = "/root/antizapret/db.sqlite"
 CONFIGS_DIR = "/root/antizapret/client/openvpn/vpn"
-EASYRSA_PATH = "/etc/openvpn/easyrsa3" # Путь к Easy-RSA
-CLIENT_SH_PATH = "/root/antizapret/client.sh" # Путь к client.sh
-SERVER_OPENVPN_CONF = "/etc/openvpn/server/server.conf" # Основной конфиг OpenVPN сервера
+EASYRSA_PATH = "/etc/openvpn/easyrsa3"
+CLIENT_SH_PATH = "/root/antizapret/client.sh"
+SERVER_OPENVPN_CONF = "/etc/openvpn/server/server.conf"
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -53,8 +53,6 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher()
 router = Router()
-
-# ... (Остальная часть файла bot.py остается без изменений) ...
 
 # Определение состояний FSM
 class UserStates(StatesGroup):
@@ -122,7 +120,7 @@ async def execute_command(command, *args):
         *full_command,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=EASYRSA_PATH # Убедитесь, что эта директория существует и корректна
+        cwd=EASYRSA_PATH
     )
     stdout, stderr = await process.communicate()
     logger.info(f"RET: {process.returncode}")
@@ -153,8 +151,11 @@ def get_user_main_menu(user_id):
             [
                 InlineKeyboardButton(text="🔑 Мои VPN-конфигурации", callback_data="my_configs"),
             ],
+            # Если у вас есть кнопка "Получить Vless", вставьте ее сюда:
+            # [
+            #    InlineKeyboardButton(text="⚡️ Получить Vless", callback_data="get_vless"), 
+            # ],
             [
-                # Добавляем кнопку с количеством конфигураций
                 InlineKeyboardButton(text=f"📊 Конфигураций: {configs_count}/{MAX_USER_CONFIGS}", callback_data="view_config_count"),
             ],
             [
@@ -170,15 +171,12 @@ def get_user_main_menu(user_id):
                 InlineKeyboardButton(text="🔗 Наш сайт", url=f"https://{YOUR_SITE}"),
             ],
             [
-                # Изменяем ссылку на поддержку
                 InlineKeyboardButton(text="🙋‍♀️ Поддержка", url="https://t.me/krackqw"), 
             ],
         ]
     )
     return keyboard
 
-
-# ... (Все остальные хендлеры и функции остаются без изменений) ...
 
 # Пример хендлера /start
 @router.message(CommandStart())
@@ -209,7 +207,7 @@ async def start(message: Message):
             f"Добро пожаловать в VPN-бот, {username}!\n\n"
             "Я помогу вам управлять вашими VPN-конфигурациями.\n"
             "Для начала создайте свою первую конфигурацию.",
-            reply_markup=get_user_main_menu(user_id) # Теперь передаем user_id
+            reply_markup=get_user_main_menu(user_id) # Передаем user_id
         )
         logger.info(f"Новый пользователь зарегистрирован: {username} ({user_id})")
     else:
@@ -222,7 +220,7 @@ async def start(message: Message):
         await message.answer(
             f"Снова здравствуйте, {username}!\n\n"
             "Ваше главное меню:",
-            reply_markup=get_user_main_menu(user_id) # Теперь передаем user_id
+            reply_markup=get_user_main_menu(user_id) # Передаем user_id
         )
         logger.info(f"Пользователь вернулся: {username} ({user_id})")
 
@@ -234,11 +232,6 @@ async def handle_view_config_count(callback_query: Message):
     user_id = callback_query.from_user.id
     configs_count = get_user_configs_count(user_id)
     await callback_query.answer(f"У вас {configs_count} из {MAX_USER_CONFIGS} конфигураций.", show_alert=True)
-    # Если вы хотите обновить сообщение с клавиатурой, используйте edit_message_reply_markup
-    # await callback_query.message.edit_reply_markup(reply_markup=get_user_main_menu(user_id))
-
-
-# ... (Все остальные хендлеры и функции) ...
 
 
 # Запуск бота

@@ -15,11 +15,11 @@ echo "Установка VPN-бота (TG-Bot-OpenVPN-Antizapret) v2.8.6 (для
 echo "=============================================="
 echo
 
-### 1) Установка системных пакетов (git, wget, curl, python3-venv, python3-pip, easy-rsa)
+### 1) Установка системных пакетов (git, wget, curl, python3-venv, python3-pip, easy-rsa, openvpn)
 echo "=== Шаг 1: Установка системных пакетов ==="
 apt update -qq
 
-REQUIRED_PKG=("git" "wget" "curl" "python3-venv" "python3-pip" "easy-rsa" "openvpn") # Добавляем openvpn
+REQUIRED_PKG=("git" "wget" "curl" "python3-venv" "python3-pip" "easy-rsa" "openvpn")
 for pkg in "${REQUIRED_PKG[@]}"; do
   if ! dpkg -s "$pkg" &>/dev/null; then
     echo "  • Устанавливаем: $pkg"
@@ -31,7 +31,7 @@ done
 
 echo
 
-### 2) Копирование easy-rsa в /etc/openvpn/easyrsa3
+### 2) Копирование easy-rsa в /etc/openvpn/easyrsa3 и инициализация PKI
 echo "=== Шаг 2: Настройка easy-rsa → /etc/openvpn/easyrsa3 ==="
 EASY_SRC="/usr/share/easy-rsa"
 EASY_DST="/etc/openvpn/easyrsa3"
@@ -44,24 +44,49 @@ if [ -d "$EASY_SRC" ]; then
   echo "  easy-rsa скопирован."
 else
   echo "  ⚠️  Папка '$EASY_SRC' не найдена, easy-rsa не установлен?"
+  exit 1
 fi
 
 # Инициализация PKI для OpenVPN
 echo "  Инициализация PKI для OpenVPN (если не инициализировано)..."
 cd "$EASY_DST"
+
 # Удаляем старый PKI, если есть, чтобы гарантировать чистую инициализацию
 if [ -d "pki" ]; then
+  echo "  Обнаружен существующий PKI, удаляем..."
   rm -rf pki
 fi
+
+# Создаем минимальный файл vars для easy-rsa
+echo "  Создаем файл 'vars' для easy-rsa..."
+cat > "$EASY_DST/vars" <<EOF
+set_var EASYRSA_ALGO "rsa"
+set_var EASYRSA_DIGEST "sha256"
+set_var EASYRSA_CA_EXPIRE 3650
+set_var EASYRSA_CERT_EXPIRE 365
+set_var EASYRSA_REQ_COUNTRY    "RU"
+set_var EASYRSA_REQ_PROVINCE   "Moscow"
+set_var EASYRSA_REQ_CITY       "Moscow"
+set_var EASYRSA_REQ_ORG        "VPN-Service"
+set_var EASYRSA_REQ_EMAIL      "vpn@example.com"
+set_var EASYRSA_REQ_OU         "Antizapret"
+EOF
+chmod 600 "$EASY_DST/vars" # Устанавливаем права для vars
+
+# Указываем easyrsa, где находится файл vars
+export EASYRSA_VARS="$EASY_DST/vars"
+
+# Инициализируем PKI
 ./easyrsa init-pki
-# Строим CA - без пароля для удобства автоматизации (в продакшене лучше с паролем)
+
+# Строим CA - используем --batch для автоматического ответа
 echo "  Генерация CA (Certificate Authority)..."
 ./easyrsa --batch build-ca nopass
 
 # Генерируем ключ сервера (без пароля)
 echo "  Генерация ключа сервера OpenVPN..."
-./easyrsa gen-req server nopass
-./easyrsa sign-req server server
+./easyrsa --batch gen-req server nopass
+./easyrsa --batch sign-req server server
 
 # Генерируем параметры Диффи-Хеллмана
 echo "  Генерация параметров Диффи-Хеллмана (может занять время)..."
@@ -114,17 +139,12 @@ if ! [[ "$MAX_USER_CONFIGS" =~ ^[0-9]+$ ]] || [ -z "$MAX_USER_CONFIGS" ]; then
   exit 1
 fi
 
-# YOUR_SERVER_IP, YOUR_SERVER_OVPN_PORT, DNS_SERVERS больше не запрашиваются
-# и будут управляться скриптами AntiZapret-VPN или использоваться из client.sh напрямую
-
 echo
 echo "Вы ввели:"
 echo "  BOT_TOKEN          = \"$BOT_TOKEN\""
 echo "  ADMIN_ID           = \"$ADMIN_ID\""
 echo "  FILEVPN_NAME       = \"$FILEVPN_NAME\""
 echo "  MAX_USER_CONFIGS   = \"$MAX_USER_CONFIGS\""
-# YOUR_SERVER_IP, YOUR_SERVER_OVPN_PORT, DNS_SERVERS больше не выводятся
-
 echo
 
 ### 4) Сохранение переменных в /root/.env (UTF-8 без BOM)
@@ -406,5 +426,4 @@ echo "        • BOT_TOKEN          = $BOT_TOKEN"
 echo "        • ADMIN_ID           = $ADMIN_ID"
 echo "        • FILEVPN_NAME        = $FILEVPN_NAME"
 echo "        • MAX_USER_CONFIGS   = $MAX_USER_CONFIGS"
-# YOUR_SERVER_IP, YOUR_SERVER_OVPN_PORT, DNS_SERVERS больше не выводятся
 echo "=============================================="

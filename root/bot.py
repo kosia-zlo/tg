@@ -106,6 +106,7 @@ async def send_welcome(message: types.Message):
     keyboard = InlineKeyboardMarkup(row_width=1)
     keyboard.add(
         InlineKeyboardButton("Создать VPN-конфиг", callback_data="generate_config"),
+        # Кнопка "Мои конфиги" теперь добавлена здесь
         InlineKeyboardButton("Мои конфиги", callback_data="my_configs"),
         InlineKeyboardButton("Как подключиться?", callback_data="how_to_connect"),
         InlineKeyboardButton("Поддержать проект", callback_data="donate")
@@ -288,8 +289,8 @@ async def how_to_connect_handler(call: CallbackQuery):
 @dp.callback_query_handler(text="donate")
 async def donate_handler(call: CallbackQuery):
     await call.message.answer(
-        "Спасибо за вашу поддержку! Вы можете отправить донат в TON на адрес:\n"
-        "`ВАШ_TON_АДРЕС`\n" # Замените на ваш реальный TON-адрес
+        "Спасибо за вашу поддержку! Вы можете узнать больше о проекте и поддержать его здесь:\n"
+        "`https://kosia-zlo.github.io/mysite/index.html`\n"
     )
     await call.answer()
 

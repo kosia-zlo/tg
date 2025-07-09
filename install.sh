@@ -221,84 +221,8 @@ fi
 echo "Копирование завершено."
 echo
 
-### 8) Замена переменных в файлах и приведение к UTF-8
-echo "=== Шаг 8: Замена переменных и приведение к UTF-8 ==-"
-
-# Функция для перекодирования в UTF-8
-recode_to_utf8() {
-  local file="$1"
-  if [ -f "$file" ]; then
-    iconv -f utf-8 -t utf-8 "$file" -o "${file}.tmp" && mv "${file}.tmp" "$file"
-  fi
-}
-
-# 8.1) Заменяем в /root/antizapret (кроме подпапки client/openvpn/vpn, где лежат шаблоны конфигов)
-grep -RIl --exclude-dir="client/openvpn/vpn" '\${FILEVPN_NAME}' /root/antizapret 2>/dev/null | while IFS= read -r f; do
-  sed -i "s|\${FILEVPN_NAME}|${FILEVPN_NAME}|g" "$f"
-  recode_to_utf8 "$f"
-  echo "  Заменено \${FILEVPN_NAME} и UTF-8: $f"
-done || true
-
-grep -RIl --exclude-dir="client/openvpn/vpn" '\$FILEVPN_NAME' /root/antizapret 2>/dev/null | while IFS= read -r f; do
-  sed -i "s|\$FILEVPN_NAME|${FILEVPN_NAME}|g" "$f"
-  recode_to_utf8 "$f"
-  echo "  Заменено \$FILEVPN_NAME и UTF-8: $f"
-done || true
-
-# 8.2) В /etc/openvpn
-grep -RIl '\${FILEVPN_NAME}' /etc/openvpn 2>/dev/null | while IFS= read -r f; do
-  sed -i "s|\${FILEVPN_NAME}|${FILEVPN_NAME}|g" "$f"
-  recode_to_utf8 "$f"
-  echo "  Заменено \${FILEVPN_NAME} и UTF-8: $f"
-done || true
-
-grep -RIl '\$FILEVPN_NAME' /etc/openvpn 2>/dev/null | while IFS= read -r f; do
-  sed -i "s|\$FILEVPN_NAME|${FILEVPN_NAME}|g" "$f"
-  recode_to_utf8 "$f"
-  echo "  Заменено \$FILEVPN_NAME и UTF-8: $f"
-done || true
-
-
-# 8.3) В /root/bot.py и /root/antizapret/client.sh
-for f in /root/bot.py /root/antizapret/client.sh; do
-  if [ -f "$f" ]; then
-    # Удаляем замену IP, порта и DNS в client.sh, так как это будет управляться AntiZapret-VPN
-    if [ "$f" == "/root/antizapret/client.sh" ]; then
-        # Удаляем строки, которые пытаются заменить IP, PORT, DNS_SERVERS
-        sed -i '/sed -i "s|YOUR_SERVER_IP|/d' "$f"
-        sed -i '/sed -i "s|YOUR_SERVER_PORT|/d' "$f"
-        sed -i '/sed -i "s|DNS_SERVERS|/d' "$f"
-        sed -i '/^remote \$VPN_SERVER_IP \$VPN_SERVER_PORT/d' "$f"
-        sed -i '/^dhcp-option DNS/d' "$f"
-        echo "  Удалены замены IP, порта, DNS из $f"
-    fi
-
-    # Замена FILEVPN_NAME (только если шаблон есть в файле)
-    if grep -q '\${FILEVPN_NAME}' "$f"; then
-      sed -i "s|\${FILEVPN_NAME}|${FILEVPN_NAME}|g" "$f"
-      recode_to_utf8 "$f"
-      echo "  Заменено \${FILEVPN_NAME} и UTF-8: $f"
-    fi
-    if grep -q '\$FILEVPN_NAME' "$f"; then
-      sed -i "s|\$FILEVPN_NAME|${FILEVPN_NAME}|g" "$f"
-      recode_to_utf8 "$f"
-      echo "  Заменено \$FILEVPN_NAME и UTF-8: $f"
-    fi
-  fi
-done
-
-# === ИСПРАВЛЕНИЕ ЗДЕСЬ ===
-# Заменяем bi4i.ru на kosia-zlo.github.io/mysite/index.html ВОТ ТАК:
-# УДАЛЯЕМ ЛИШНИЙ HTTPS:// из строки замены, чтобы не было дублирования
-echo "  Замена упоминаний bi4i.ru на kosia-zlo.github.io/mysite/index.html (без https://)..."
-find /root -type f -exec grep -lIZ "bi4i.ru" {} + | xargs -0 sed -i 's|bi4i.ru|kosia-zlo.github.io/mysite/index.html|g'
-echo "  Замена ссылок завершена."
-# === КОНЕЦ ИСПРАВЛЕНИЯ ===
-
-echo
-
-### 9) Принудительное пересоздание виртуального окружения и установка зависимостей
-echo "=== Шаг 9: Пересоздание виртуального окружения и установка зависимостей ==="
+### 8) Принудительное пересоздание виртуального окружения и установка зависимостей
+echo "=== Шаг 8: Пересоздание виртуального окружения и установка зависимостей ==="
 VENV_DIR="/root/venv"
 
 if [ -d "$VENV_DIR" ]; then
@@ -321,27 +245,33 @@ deactivate
 
 echo
 
-### 10) Даем всем скопированным файлам права 777
-echo "=== Шаг 10: Полные права (777) всем скопированным файлам ==="
+### 9) Даем всем скопированным файлам права 777
+echo "=== Шаг 9: Полные права (777) всем скопированным файлам ==="
 if [ -d "/root/antizapret" ]; then
   chmod -R 777 "/root/antizapret"
   echo "  Права 777 выставлены на /root/antizapret"
 fi
 
-# Права на /etc/openvpn не будут тронуты, так как PKI не управляется этим скриптом
-echo "  Пропускаем выставление прав 777 на /etc/openvpn, так как Easy-RSA и PKI не управляются этим скриптом."
-
-if [ -d "$DST_ROOT" ]; then
-  # Рекурсивно выставляем права для всех файлов, скопированных в /root/
-  find "$DST_ROOT" -type f \( -path "$DST_ROOT/bot.py" -o -path "$DST_ROOT/requirements.txt" -o -path "$DST_ROOT/antizapret/client.sh" -o -path "$DST_ROOT/db.py" -o -path "$DST_ROOT/.env" \) -exec chmod 777 {} +
-  echo "  Права 777 выставлены на основные файлы в /root/"
+if [ -d "/etc/openvpn" ]; then
+  chmod -R 777 "/etc/openvpn"
+  echo "  Права 777 выставлены на /etc/openvpn"
 fi
 
+if [ -d "$SRC_ROOT" ]; then
+  find "$SRC_ROOT" -type f | while IFS= read -r srcf; do
+    rel="${srcf#$SRC_ROOT/}"
+    target="/root/$rel"
+    if [ -e "$target" ]; then
+      chmod 777 "$target"
+      echo "  Права 777 выставлены на $target"
+    fi
+  done
+fi
 
 echo
 
-### 11) Создание systemd-юнита vpnbot.service
-echo "=== Шаг 11: Создание systemd-юнита /etc/systemd/system/vpnbot.service ==-"
+### 10) Создание systemd-юнита vpnbot.service
+echo "=== Шаг 10: Создание systemd-юнита /etc/systemd/system/vpnbot.service ==="
 cat > /etc/systemd/system/vpnbot.service <<EOF
 [Unit]
 Description=VPN Telegram Bot
@@ -364,15 +294,15 @@ EOF
 echo "  Юнит записан: /etc/systemd/system/vpnbot.service"
 echo
 
-### 12) Перезагрузка systemd, автозапуск, запуск службы
-echo "=== Шаг 12: Перезагрузка systemd и запуск vpnbot.service ==-"
+### 11) Перезагрузка systemd, автозапуск, запуск службы
+echo "=== Шаг 11: Перезагрузка systemd и запуск vpnbot.service ==="
 systemctl daemon-reload
 systemctl enable vpnbot.service
 systemctl restart vpnbot.service
 
 echo
 
-### 13) Итоговое сообщение и инструкции
+### 12) Итоговое сообщение и инструкции
 echo "=============================================="
 echo "Установка завершена! Бот запущен как vpnbot.service."
 echo
@@ -383,15 +313,12 @@ echo "  ● Смотреть логи:        journalctl -u vpnbot -f"
 echo
 echo "Основные пути и параметры:"
 echo "  ● /root/antizapret       — скопировано из репозитория antizapret/"
-echo "  ● /etc/openvpn           — скопировано из репозитория etc/openvpn/"
-echo "  ● /etc/openvpn/easyrsa3  — PKI и Easy-RSA не управляются этим скриптом."
-echo "  ● /root                  — скопировано из репозитория root/ (bot.py, requirements.txt и т. д.)"
-echo "  ● /root/antizapret/client.sh — скрипт для управления OpenVPN-клиентами (наличие этого файла определяет установку AntiZapret-VPN)"
+echo "  ● /etc/openvpn          — скопировано из репозитория etc/openvpn/"
+echo "  ● /etc/openvpn/easyrsa3  — скопирован easy-rsa"
+echo "  ● /root                 — скопировано из репозитория root/ (bot.py, client.sh, requirements.txt и т. д.)"
 echo "  ● Виртуальное окружение: /root/venv"
 echo "  ● Файл с переменными:    /root/.env"
-echo "        • BOT_TOKEN          = \$BOT_TOKEN"
-echo "        • ADMIN_ID           = \$ADMIN_ID"
-echo "        • FILEVPN_NAME       = \$FILEVPN_NAME"
-echo "        • MAX_USER_CONFIGS   = \$MAX_USER_CONFIGS"
-echo "        • Домашняя страница проекта: https://kosia-zlo.github.io/mysite/index.html"
+echo "       • BOT_TOKEN    = $BOT_TOKEN"
+echo "       • ADMIN_ID     = $ADMIN_ID"
+echo "       • FILEVPN_NAME = $FILEVPN_NAME"
 echo "=============================================="

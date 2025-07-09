@@ -1,4 +1,3 @@
-# Импорты (оставьте их как есть)
 import logging
 import sqlite3
 import asyncio
@@ -22,6 +21,8 @@ from aiogram.utils.formatting import (
     Bold,
     Text,
 )
+# Импорт для DefaultBotProperties
+from aiogram.client.default import DefaultBotProperties
 
 
 # Загрузка переменных окружения
@@ -43,14 +44,14 @@ DB_PATH = "/root/antizapret/db.sqlite"
 CONFIGS_DIR = "/root/antizapret/client/openvpn/vpn"
 EASYRSA_PATH = "/etc/openvpn/easyrsa3"
 CLIENT_SH_PATH = "/root/antizapret/client.sh"
-SERVER_OPENVPN_CONF = "/etc/openvpn/server/server.conf"
+SERVER_OPENVPN_CONF = "/etc/openvpn/server/server.conf" # Этот путь не используется напрямую ботом для изменения, но оставлен для справки
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Инициализация бота и диспетчера
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+# Инициализация бота и диспетчера с использованием DefaultBotProperties
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 router = Router()
 

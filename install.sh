@@ -123,7 +123,7 @@ echo
 
 ### 6) Клонирование репозитория во временную папку
 TMP_DIR="/tmp/antizapret-install"
-GIT_URL="https://github.com/VATAKATru61/TG-Bot-OpenVPN-Antizapret.git" # Ваш репозиторий
+GIT_URL="https://github.com/kosia-zlo/tg.git" # Ваш репозиторий
 GIT_URL_CLIENT_SH="https://github.com/GubernievS/AntiZapret-VPN.git" # Репозиторий client.sh
 BRANCH="main"
 

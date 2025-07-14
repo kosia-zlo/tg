@@ -303,6 +303,16 @@ systemctl daemon-reload
 systemctl enable vpnbot.service
 systemctl restart vpnbot.service
 
+### 11.5) Добавление задания в cron для update.sh
+echo "=== Шаг 11.5: Добавление автообновления в cron ==="
+CRON_JOB="0 5 * * * /root/update.sh >> /var/log/vpnbot_update.log 2>&1"
+
+# Удалим старые записи update.sh и добавим новую
+(crontab -l 2>/dev/null | grep -Fv "update.sh"; echo "$CRON_JOB") | crontab -
+echo "  ⏰ Добавлено задание в cron: ежедневно в 05:00"
+echo
+
+
 echo
 
 ### 12) Итоговое сообщение и инструкции

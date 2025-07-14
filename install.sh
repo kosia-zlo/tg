@@ -93,9 +93,9 @@ echo
 
 ### 5) Клонирование репозитория во временную папку
 TMP_DIR="/tmp/antizapret-install"
-GIT_URL="https://github.com/kosia-zlo/tg_lite.git"
+GIT_URL="https://github.com/kosia-zlo/tg.git"
 BRANCH="main"
-wget -O /root/update.sh https://raw.githubusercontent.com/kosia-zlo/tg_lite/main/update.sh 
+wget -O /root/update.sh https://raw.githubusercontent.com/kosia-zlo/tg/main/update.sh 
 chmod +x /root/update.sh
 
 if [ -d "$TMP_DIR" ]; then
